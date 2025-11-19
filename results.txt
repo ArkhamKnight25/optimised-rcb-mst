@@ -1,2 +1,2 @@
 Baseline: Makespan=190, Turns=492
-Optimized: Makespan=189, Turns=305
+Optimized: Makespan=189, Turns=317

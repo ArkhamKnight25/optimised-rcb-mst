@@ -166,9 +166,16 @@ class OptimizedMCPP:
         return paths
 
     def recursive_coordinate_bisection(self, nodes, k):
-        """Recursively split nodes into k balanced subsets."""
+        """Recursively split nodes into k balanced subsets - IMPROVED."""
         if k == 1:
             return [nodes]
+        
+        # SAFETY CHECK: If not enough nodes, assign empty regions to some robots
+        if len(nodes) < k:
+            # Give 1 node to first len(nodes) robots, empty to rest
+            result = [[n] for n in nodes]
+            result += [[] for _ in range(k - len(nodes))]
+            return result
         
         # Split k into k1 (left) and k2 (right)
         k1 = k // 2
@@ -177,21 +184,29 @@ class OptimizedMCPP:
         # Determine split axis (x or y) based on spread
         xs = [n[0] for n in nodes]
         ys = [n[1] for n in nodes]
-        x_spread = max(xs) - min(xs)
-        y_spread = max(ys) - min(ys)
+        x_spread = max(xs) - min(xs) if xs else 0
+        y_spread = max(ys) - min(ys) if ys else 0
         
         # Sort nodes along chosen axis
         if x_spread >= y_spread:
             nodes.sort(key=lambda n: (n[0], n[1]))
         else:
             nodes.sort(key=lambda n: (n[1], n[0]))
-            
-        # Split index based on target ratio
-        split_idx = int(len(nodes) * (k1 / k))
+        
+        # IMPROVED: Calculate split ensuring both sides get at least k1/k2 nodes
+        # Target ratio but ensure minimum nodes per side
+        target_split = int(len(nodes) * (k1 / k))
+        
+        # Ensure left side gets at least k1 nodes (if possible)
+        min_left = k1
+        max_left = len(nodes) - k2
+        
+        split_idx = max(min_left, min(target_split, max_left))
         
         left_nodes = nodes[:split_idx]
         right_nodes = nodes[split_idx:]
         
+        # Recursively split
         return self.recursive_coordinate_bisection(left_nodes, k1) + \
                self.recursive_coordinate_bisection(right_nodes, k2)
 
@@ -225,16 +240,33 @@ class OptimizedMCPP:
         return T
 
     def local_search(self, path, max_iters=1000):
-        """Simple SA/Hill Climbing for a single path."""
+        """2-opt Local Search with strict connectivity checks."""
         curr_path = path[:]
         curr_turns = count_turns(curr_path)
+        n = len(curr_path)
         
         for _ in range(max_iters):
-            # 2-opt
-            if len(curr_path) < 4: break
-            i, j = sorted(random.sample(range(1, len(curr_path)-1), 2))
-            if j - i < 1: continue
+            if n < 4: break
             
+            # Pick two cut points i and j
+            # Path structure: ... A [B ... C] D ...
+            # Indices:       i-1  i       j   j+1
+            i = random.randint(1, n - 2)
+            j = random.randint(i, n - 2)
+            
+            # Nodes involved in the potential new connection
+            A = curr_path[i-1]
+            B = curr_path[i]
+            C = curr_path[j]
+            D = curr_path[j+1]
+            
+            # STRICT VALIDITY CHECK:
+            # If we reverse B...C, A must connect to C, and B must connect to D.
+            # Distance must be exactly 1 (grid neighbor).
+            if euclid(A, C) > 1.01 or euclid(B, D) > 1.01:
+                continue
+            
+            # Perform swap
             new_path = curr_path[:i] + list(reversed(curr_path[i:j+1])) + curr_path[j+1:]
             new_turns = count_turns(new_path)
             
