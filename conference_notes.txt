@@ -1,0 +1,41 @@
+================================================================================
+CONFERENCE PRESENTATION NOTES: MULTI-ROBOT COVERAGE PATH PLANNING (MCPP)
+================================================================================
+
+1. BASELINE ARCHITECTURE: "Single Path Split"
+"A Turn-minimizing Algorithm For Multi-robot Coverage Path Planning" by Junjie Lu et al. (2022)."
+--------------------------------------------------------------------------------
+**Concept:**
+The baseline approach simplifies the multi-robot problem by treating it as a single-robot problem first.
+1.  **Global Path Generation:** It generates one giant coverage path that visits every cell in the grid (using a Spanning Tree Coverage algorithm).
+2.  **Segmentation:** It cuts this giant path into 'k' equal-length segments.
+3.  **Assignment:** Each robot is assigned one segment.
+
+**Limitations:**
+*   **Arbitrary Boundaries:** The split points are determined purely by path count, not by the geometry of the room. This results in regions that are jagged, irregular, and intertwined.
+*   **High Turn Count:** Because the regions are oddly shaped, robots are forced to make frequent turns to stay on their assigned path.
+*   **Inefficient Motion:** In real-world robotics, turning takes time and energy (deceleration -> turn -> acceleration). A path with 500 turns is significantly slower than a path with 300 turns, even if the distance is the same.
+
+2. OPTIMIZED ARCHITECTURE: "Divide and Conquer" (RCB + Biased MST)
+--------------------------------------------------------------------------------
+**Concept:**
+Your optimized approach solves the partitioning problem *before* the path planning problem.
+1.  **Recursive Coordinate Bisection (RCB):** You recursively split the grid into two halves using the median line of the longest axis. This is repeated until you have 'k' balanced regions.
+2.  **Biased Spanning Tree (BST):** Inside each region, you generate a path. Crucially, you use a "Biased" Minimum Spanning Tree that makes horizontal or vertical connections "cheaper" than turning. This forces the path to form long, straight scanning lines (boustrophedon motion).
+
+**Advantages:**
+*   **Geometric Coherence:** Robots are assigned to compact, rectangular-like zones.
+*   **Turn Minimization:** The algorithm explicitly optimizes for straight-line motion.
+*   **Scalability:** Solving 'k' small path planning problems is faster than solving one giant one.
+
+3. RESULTS COMPARISON
+--------------------------------------------------------------------------------
+Based on your experiment (30x20 Grid, 6 Robots):
+
+*   **Baseline Turns:** ~492
+*   **Optimized Turns:** ~305
+*   **Improvement:** ~38% Reduction in Turns
+
+**Interpretation:**
+While the "Makespan" (maximum distance traveled) is similar for both (because both divide the work evenly), the *quality* of the path is vastly superior in your optimized version. A 38% reduction in turns translates to smoother, faster, and more energy-efficient robot operation.
+
