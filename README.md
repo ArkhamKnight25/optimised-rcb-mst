@@ -19,25 +19,6 @@ Instead of generating one giant path and cutting it, we first partition the grid
 
 ### 2. Path Planning: Biased Spanning Tree (BST)
 For each region, we generate a coverage path that minimizes turns.
--   **Algorithm**: Constructs a Minimum Spanning Tree (MST) with edge weights biased towards straight lines (horizontal or vertical).
--   **Benefit**: Creates "scanning" (boustrophedon) patterns naturally, avoiding the random zig-zags of standard MSTs.
--   **Refinement**: A fast Local Search (2-opt) is applied to smooth out any remaining inefficiencies.
-
-## Results
-
-| Metric | Baseline (Split Path) | Optimized (RCB + BST) | Improvement |
-| :--- | :--- | :--- | :--- |
-| **Total Turns** | ~490 | **~305** | **~38% Reduction** |
-| **Makespan** | ~190 | **~189** | **Optimal** |
-
-*(Results based on a 30x20 grid with 6 robots)*
-
-## Installation
-
-Requires Python 3.8+ and the following libraries:
-
-```bash
-pip install numpy networkx matplotlib
 ```
 
 ## Usage
@@ -59,4 +40,5 @@ This will:
 
 -   `optimized_mcpp.py`: Main script containing the `OptimizedMCPP` solver and comparison logic.
 -   `results.txt`: Output file containing the latest run metrics.
--   `mcpp_comparison.png`: Visualization of the generated paths.
+-   `mcpp_comparison.png`: Visualization of Baseline vs. Best Optimized path.
+-   `all_turn_comparison.png`: Visualization of Optimized path under all kinematic models.

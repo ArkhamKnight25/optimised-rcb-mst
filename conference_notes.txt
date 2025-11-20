@@ -22,6 +22,30 @@ The baseline approach simplifies the multi-robot problem by treating it as a sin
 Your optimized approach solves the partitioning problem *before* the path planning problem.
 1.  **Recursive Coordinate Bisection (RCB):** You recursively split the grid into two halves using the median line of the longest axis. This is repeated until you have 'k' balanced regions.
 2.  **Biased Spanning Tree (BST):** Inside each region, you generate a path. Crucially, you use a "Biased" Minimum Spanning Tree that makes horizontal or vertical connections "cheaper" than turning. This forces the path to form long, straight scanning lines (boustrophedon motion).
+================================================================================
+CONFERENCE PRESENTATION NOTES: MULTI-ROBOT COVERAGE PATH PLANNING (MCPP)
+================================================================================
+
+1. BASELINE ARCHITECTURE: "Single Path Split"
+"A Turn-minimizing Algorithm For Multi-robot Coverage Path Planning" by Junjie Lu et al. (2022)."
+--------------------------------------------------------------------------------
+**Concept:**
+The baseline approach simplifies the multi-robot problem by treating it as a single-robot problem first.
+1.  **Global Path Generation:** It generates one giant coverage path that visits every cell in the grid (using a Spanning Tree Coverage algorithm).
+2.  **Segmentation:** It cuts this giant path into 'k' equal-length segments.
+3.  **Assignment:** Each robot is assigned one segment.
+
+**Limitations:**
+*   **Arbitrary Boundaries:** The split points are determined purely by path count, not by the geometry of the room. This results in regions that are jagged, irregular, and intertwined.
+*   **High Turn Count:** Because the regions are oddly shaped, robots are forced to make frequent turns to stay on their assigned path.
+*   **Inefficient Motion:** In real-world robotics, turning takes time and energy (deceleration -> turn -> acceleration). A path with 500 turns is significantly slower than a path with 300 turns, even if the distance is the same.
+
+2. OPTIMIZED ARCHITECTURE: "Divide and Conquer" (RCB + Biased MST)
+--------------------------------------------------------------------------------
+**Concept:**
+Your optimized approach solves the partitioning problem *before* the path planning problem.
+1.  **Recursive Coordinate Bisection (RCB):** You recursively split the grid into two halves using the median line of the longest axis. This is repeated until you have 'k' balanced regions.
+2.  **Biased Spanning Tree (BST):** Inside each region, you generate a path. Crucially, you use a "Biased" Minimum Spanning Tree that makes horizontal or vertical connections "cheaper" than turning. This forces the path to form long, straight scanning lines (boustrophedon motion).
 
 **Advantages:**
 *   **Geometric Coherence:** Robots are assigned to compact, rectangular-like zones.
@@ -32,10 +56,19 @@ Your optimized approach solves the partitioning problem *before* the path planni
 --------------------------------------------------------------------------------
 Based on your experiment (30x20 Grid, 6 Robots):
 
-*   **Baseline Turns:** ~492
-*   **Optimized Turns:** ~305
-*   **Improvement:** ~38% Reduction in Turns
+*   **Baseline (Stop & Turn):** 834.00s Total Time (492 Turns)
+*   **Optimized (Stop & Turn):** 628.00s Total Time (317 Turns) -> ~25% Faster
+*   **Optimized (Ackermann):** 284.49s Total Time -> **~66% Faster**
 
 **Interpretation:**
-While the "Makespan" (maximum distance traveled) is similar for both (because both divide the work evenly), the *quality* of the path is vastly superior in your optimized version. A 38% reduction in turns translates to smoother, faster, and more energy-efficient robot operation.
+While the "Makespan" (distance) is similar, the *quality* of the path is vastly superior.
+1.  **Path Planning Impact:** Reducing turns alone (Stop & Turn model) saves ~25% time.
+2.  **Kinematic Impact:** Using an agile robot (Ackermann) on the optimized path saves ~66% time compared to the baseline.
 
+4. KINEMATIC MODELING
+--------------------------------------------------------------------------------
+The system now evaluates paths under four distinct motion models:
+*   **Stop & Turn:** Robot stops completely to rotate (Baseline).
+*   **Smooth Turn:** Robot turns while moving (radius constrained).
+*   **Differential:** Tank-like turning.
+*   **Ackermann:** Car-like steering (fastest for smooth paths).
