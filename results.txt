@@ -1,2 +1,5 @@
-Baseline: Makespan=190, Turns=492
-Optimized: Makespan=189, Turns=317
+Baseline (Stop & Turn): TotalTime=834.00, TurnTime=3248.00
+Optimized (Stop & Turn): TotalTime=628.00, TurnTime=2080.00
+Optimized (Smooth Turn): TotalTime=457.09, TurnTime=1271.74
+Optimized (Differential): TotalTime=390.09, TurnTime=954.74
+Optimized (Ackermann): TotalTime=284.49, TurnTime=455.53

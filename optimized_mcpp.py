@@ -7,6 +7,49 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from dataclasses import dataclass
+from enum import Enum
+
+# -----------------------
+# Kinematics
+# -----------------------
+class KinematicModel(Enum):
+    STOP_AND_TURN = "stop_and_turn"
+    SMOOTH_TURN = "smooth_turn"
+    DIFFERENTIAL = "differential"
+    ACKERMANN = "ackermann"
+
+@dataclass
+class RobotKinematics:
+    model: KinematicModel
+    max_velocity: float = 1.0
+    max_angular_velocity: float = 1.0
+    min_turning_radius: float = 0.5
+    acceleration: float = 0.5
+    angular_acceleration: float = 0.5
+    stop_time: float = 1.0
+    turn_time_per_90deg: float = 2.0
+
+    def calculate_turn_time(self, angle_radians: float) -> float:
+        angle_deg = abs(math.degrees(angle_radians))
+        if self.model == KinematicModel.STOP_AND_TURN:
+            return (self.max_velocity / self.acceleration) + \
+                   (angle_deg / 90.0) * self.turn_time_per_90deg + \
+                   (self.max_velocity / self.acceleration)
+        elif self.model == KinematicModel.SMOOTH_TURN:
+            required_radius = self.max_velocity / self.max_angular_velocity
+            if required_radius > self.min_turning_radius:
+                reduced_velocity = self.min_turning_radius * self.max_angular_velocity
+                slow_time = (self.max_velocity - reduced_velocity) / self.acceleration
+                return slow_time * 2 + angle_radians / self.max_angular_velocity
+            return angle_radians / self.max_angular_velocity
+        elif self.model == KinematicModel.DIFFERENTIAL:
+            if angle_deg > 45:
+                return self.stop_time + angle_radians / self.max_angular_velocity
+            return angle_radians / (self.max_angular_velocity * 0.5)
+        else: # ACKERMANN
+            return (self.min_turning_radius * angle_radians) / (self.max_velocity * 0.7)
+
 # -----------------------
 # Utilities
 # -----------------------
@@ -38,6 +81,42 @@ def count_turns(path):
 
 def path_length(path):
     return sum(euclid(path[i], path[i-1]) for i in range(1, len(path)))
+
+def calculate_turn_angle(dir1, dir2):
+    if dir1 == dir2: return 0.0
+    angle1 = math.atan2(dir1[1], dir1[0])
+    angle2 = math.atan2(dir2[1], dir2[0])
+    diff = angle2 - angle1
+    while diff > math.pi: diff -= 2*math.pi
+    while diff < -math.pi: diff += 2*math.pi
+    return abs(diff)
+
+def calculate_path_time(path, kinematics, cell_size=1.0):
+    if len(path) < 2:
+        return {'total': 0, 'move': 0, 'turn': 0}
+    
+    move_time = 0
+    turn_time = 0
+    
+    # Move time
+    dist = path_length(path) * cell_size
+    move_time = dist / kinematics.max_velocity
+    
+    # Turn time
+    for i in range(1, len(path)-1):
+        p_prev = path[i-1]
+        p_curr = path[i]
+        p_next = path[i+1]
+        
+        dir1 = (p_curr[0]-p_prev[0], p_curr[1]-p_prev[1])
+        dir2 = (p_next[0]-p_curr[0], p_next[1]-p_curr[1])
+        
+        if dir1 != dir2:
+            angle = calculate_turn_angle(dir1, dir2)
+            if angle > 0.01:
+                turn_time += kinematics.calculate_turn_time(angle)
+                
+    return {'total': move_time + turn_time, 'move': move_time, 'turn': turn_time}
 
 # -----------------------
 # PART 1: Baseline (Single Path Split)
@@ -289,7 +368,7 @@ def run_comparison(width=30, height=20, k=4, obs_ratio=0.1):
     
     print(f"Grid: {width}x{height}, K={k}, Obstacles={len(obstacles)}")
     
-    # --- Baseline ---
+    # --- Baseline (Stop & Turn) ---
     t0 = time.time()
     T_base = tmstc_star_spanning_tree(nodes, width, height, obstacles)
     full_path_base = tree_to_coverage_path(T_base)
@@ -299,9 +378,14 @@ def run_comparison(width=30, height=20, k=4, obs_ratio=0.1):
     makespan_base = max(len(p) for p in paths_base)
     turns_base = sum(count_turns(p) for p in paths_base)
     
-    print(f"Baseline: Makespan={makespan_base}, Turns={turns_base}, Time={t_base:.3f}s")
+    kinematics_base = RobotKinematics(KinematicModel.STOP_AND_TURN)
+    times_base = [calculate_path_time(p, kinematics_base) for p in paths_base]
+    total_time_base = max(t['total'] for t in times_base) if times_base else 0
+    turn_time_base = sum(t['turn'] for t in times_base)
     
-    # --- Optimized ---
+    print(f"Baseline (Stop & Turn): Makespan={makespan_base}, Turns={turns_base}, TotalTime={total_time_base:.2f}s")
+
+    # --- Optimized Path Generation ---
     t0 = time.time()
     opt_solver = OptimizedMCPP(width, height, obstacles, k)
     paths_opt = opt_solver.solve()
@@ -310,21 +394,70 @@ def run_comparison(width=30, height=20, k=4, obs_ratio=0.1):
     makespan_opt = max(len(p) for p in paths_opt)
     turns_opt = sum(count_turns(p) for p in paths_opt)
     
-    print(f"Optimized: Makespan={makespan_opt}, Turns={turns_opt}, Time={t_opt:.3f}s")
+    # --- Evaluate Optimized Path with ALL Models ---
+    models = [
+        (KinematicModel.STOP_AND_TURN, "Stop & Turn"),
+        (KinematicModel.SMOOTH_TURN, "Smooth Turn"),
+        (KinematicModel.DIFFERENTIAL, "Differential"),
+        (KinematicModel.ACKERMANN, "Ackermann")
+    ]
     
-    # --- Plotting ---
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    opt_results = []
+    best_opt_result = None
+    min_total_time = float('inf')
     
-    plot_paths(ax1, paths_base, width, height, obstacles, f"Baseline (Split Path)\nM={makespan_base}, T={turns_base}")
-    plot_paths(ax2, paths_opt, width, height, obstacles, f"Optimized (Partition + Biased MST)\nM={makespan_opt}, T={turns_opt}")
+    print("\n--- Optimized Path Evaluation ---")
+    for model, name in models:
+        kinematics = RobotKinematics(model)
+        times = [calculate_path_time(p, kinematics) for p in paths_opt]
+        total_time = max(t['total'] for t in times) if times else 0
+        turn_time = sum(t['turn'] for t in times)
+        
+        res = {
+            'name': name,
+            'model': model,
+            'total_time': total_time,
+            'turn_time': turn_time,
+            'makespan': makespan_opt,
+            'turns': turns_opt
+        }
+        opt_results.append(res)
+        print(f"  {name:<15}: TotalTime={total_time:.2f}s, TurnTime={turn_time:.2f}s")
+        
+        if total_time < min_total_time:
+            min_total_time = total_time
+            best_opt_result = res
+
+    # --- Plot 1: Baseline vs Best Optimized ---
+    fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    
+    plot_paths(ax1, paths_base, width, height, obstacles, 
+               f"Baseline (Stop & Turn)\nM={makespan_base}, T={turns_base}\nTime={total_time_base:.1f}s")
+    
+    plot_paths(ax2, paths_opt, width, height, obstacles, 
+               f"Optimized ({best_opt_result['name']})\nM={makespan_opt}, T={turns_opt}\nTime={best_opt_result['total_time']:.1f}s")
     
     plt.tight_layout()
     plt.savefig('mcpp_comparison.png')
-    print("Saved comparison plot to 'mcpp_comparison.png'")
+    print("\nSaved 'mcpp_comparison.png' (Baseline vs Best Optimized)")
+
+    # --- Plot 2: All Kinematic Models (Optimized Path) ---
+    fig2, axes = plt.subplots(2, 2, figsize=(16, 12))
+    axes = axes.flatten()
     
+    for i, res in enumerate(opt_results):
+        plot_paths(axes[i], paths_opt, width, height, obstacles,
+                   f"Optimized Path - {res['name']}\nTime={res['total_time']:.1f}s (Turn={res['turn_time']:.1f}s)")
+        
+    plt.tight_layout()
+    plt.savefig('all_turn_comparison.png')
+    print("Saved 'all_turn_comparison.png' (All Kinematic Models)")
+    
+    # --- Save Results ---
     with open('results.txt', 'w') as f:
-        f.write(f"Baseline: Makespan={makespan_base}, Turns={turns_base}\n")
-        f.write(f"Optimized: Makespan={makespan_opt}, Turns={turns_opt}\n")
+        f.write(f"Baseline (Stop & Turn): TotalTime={total_time_base:.2f}, TurnTime={turn_time_base:.2f}\n")
+        for res in opt_results:
+            f.write(f"Optimized ({res['name']}): TotalTime={res['total_time']:.2f}, TurnTime={res['turn_time']:.2f}\n")
 
 
 def plot_paths(ax, paths, width, height, obstacles, title):
