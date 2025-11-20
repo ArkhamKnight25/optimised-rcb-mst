@@ -427,15 +427,14 @@ def run_comparison(width=30, height=20, k=4, obs_ratio=0.1):
         if total_time < min_total_time:
             min_total_time = total_time
             best_opt_result = res
-
     # --- Plot 1: Baseline vs Best Optimized ---
     fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
     
     plot_paths(ax1, paths_base, width, height, obstacles, 
-               f"Baseline (Stop & Turn)\nM={makespan_base}, T={turns_base}\nTime={total_time_base:.1f}s")
+               f"Baseline (Stop & Turn)\nM={makespan_base}, T={turns_base}\nTime={total_time_base:.1f}s (Total Turn Time={turn_time_base:.1f}s)")
     
     plot_paths(ax2, paths_opt, width, height, obstacles, 
-               f"Optimized ({best_opt_result['name']})\nM={makespan_opt}, T={turns_opt}\nTime={best_opt_result['total_time']:.1f}s")
+               f"Optimized ({best_opt_result['name']})\nM={makespan_opt}, T={turns_opt}\nTime={best_opt_result['total_time']:.1f}s (Total Turn Time={best_opt_result['turn_time']:.1f}s)")
     
     plt.tight_layout()
     plt.savefig('mcpp_comparison.png')
@@ -447,7 +446,7 @@ def run_comparison(width=30, height=20, k=4, obs_ratio=0.1):
     
     for i, res in enumerate(opt_results):
         plot_paths(axes[i], paths_opt, width, height, obstacles,
-                   f"Optimized Path - {res['name']}\nTime={res['total_time']:.1f}s (Turn={res['turn_time']:.1f}s)")
+                   f"Optimized Path - {res['name']}\nTime={res['total_time']:.1f}s (Total Turn Time={res['turn_time']:.1f}s)")
         
     plt.tight_layout()
     plt.savefig('all_turn_comparison.png')

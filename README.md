@@ -19,6 +19,47 @@ Instead of generating one giant path and cutting it, we first partition the grid
 
 ### 2. Path Planning: Biased Spanning Tree (BST)
 For each region, we generate a coverage path that minimizes turns.
+-   **Algorithm**: Constructs a Minimum Spanning Tree (MST) with edge weights biased towards straight lines (horizontal or vertical).
+-   **Benefit**: Creates "scanning" (boustrophedon) patterns naturally, avoiding the random zig-zags of standard MSTs.
+-   **Refinement**: A fast Local Search (2-opt) is applied to smooth out any remaining inefficiencies.
+
+## Results
+
+### 1. Algorithmic Impact (Path Planning Strategy)
+*Comparison using the same "Stop & Turn" motion model to isolate the benefit of the path planning algorithm.*
+
+| Metric | Baseline (Single Path Split) | Optimized (Divide & Conquer) | Improvement |
+| :--- | :--- | :--- | :--- |
+| **Total Turns** | 492 | **317** | **~36% Reduction** |
+| **Total Time** | 834.00s | **628.00s** | **~25% Faster** |
+| **Turn Time** | 3248.00s | **2080.00s** | **~36% Less Waiting** |
+
+### 2. Kinematic Impact (Hardware Capabilities)
+*Comparison of the SAME Optimized Path under different motion models to show the benefit of agile robots.*
+
+| Kinematic Model | Total Time | Turn Time | Improvement vs Baseline |
+| :--- | :--- | :--- | :--- |
+| **Stop & Turn** | 628.00s | 2080.00s | 25% |
+| **Smooth Turn** | 457.09s | 1271.74s | 45% |
+| **Differential** | 390.09s | 954.74s | 53% |
+| **Ackermann** | **284.49s** | **455.53s** | **66%** |
+
+*(Results based on a 30x20 grid with 6 robots)*
+
+## Visual Comparison
+
+| Baseline vs. Optimized | Kinematic Model Comparison |
+| :---: | :---: |
+| **`mcpp_comparison.png`** | **`all_turn_comparison.png`** |
+| ![Baseline vs Optimized](mcpp_comparison.png) | ![All Turn Comparison](all_turn_comparison.png) |
+| *Comparison of path topology. Note the chaotic turns in Baseline vs. structured scanning in Optimized.* | *Performance of the optimized path under different kinematic constraints (Stop & Turn, Smooth, Differential, Ackermann).* |
+
+## Installation
+
+Requires Python 3.8+ and the following libraries:
+
+```bash
+pip install numpy networkx matplotlib
 ```
 
 ## Usage
@@ -34,7 +75,7 @@ This will:
 2.  Run the Baseline algorithm.
 3.  Run the Optimized algorithm.
 4.  Print metrics to the console and `results.txt`.
-5.  Save a visualization comparison to `mcpp_comparison.png`.
+5.  Save visualization comparisons to `mcpp_comparison.png` and `all_turn_comparison.png`.
 
 ## File Structure
 
